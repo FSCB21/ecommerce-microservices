@@ -6,4 +6,6 @@ CREATE DATABASE products_db;
 CREATE DATABASE products_test_db;
 
 CREATE DATABASE orders_db;
+CREATE DATABASE orders_test_db;
+
 CREATE DATABASE notifications_db;
