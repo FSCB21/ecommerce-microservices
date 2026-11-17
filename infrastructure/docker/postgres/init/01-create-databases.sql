@@ -9,3 +9,4 @@ CREATE DATABASE orders_db;
 CREATE DATABASE orders_test_db;
 
 CREATE DATABASE notifications_db;
+CREATE DATABASE notifications_test_db;

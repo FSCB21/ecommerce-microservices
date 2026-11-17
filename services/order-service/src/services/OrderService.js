@@ -1,6 +1,7 @@
-
 import { Order, OrderItem } from '../models/index.js';
 import ProductService from './ProductService.js';
+import UserClient from './UserClient.js';
+import EventPublisher from './EventPublisher.js';
 import { randomUUID } from 'node:crypto';
 import sequelize from '../config/sequelize.js';
 
@@ -35,8 +36,51 @@ class OrderService {
         return order;
     }
 
+    // Confirmar un pedido y publicar el evento
+    async confirmOrder(orderId) {
+        const order = await this.getOrderById(orderId);
 
-    
+        // Evitar confirmar y publicar nuevamente el mismo pedido
+        if (order.status === 'CONFIRMED') {
+            return order;
+        }
+
+        // No permitir confirmar pedidos fallidos
+        if (order.status === 'FAILED') {
+            const error = new Error(
+                'No se puede confirmar un pedido en estado FAILED'
+            );
+            error.statusCode = 409;
+            throw error;
+        }
+
+        // Consultar el usuario mediante User Service
+        const user = await UserClient.getUserById(order.user_id);
+
+        if (!user || !user.email) {
+            const error = new Error(
+                'No se encontró un correo electrónico válido para el usuario'
+            );
+            error.statusCode = 422;
+            throw error;
+        }
+
+        // Actualizar el estado del pedido
+        order.status = 'CONFIRMED';
+        await order.save();
+
+        // Publicar el evento para Notification Service
+        await EventPublisher.publish('order.confirmed', {
+            orderId: order.id,
+            userId: order.user_id,
+            recipientEmail: user.email,
+            type: 'ORDER_CONFIRMED',
+            message: `Tu pedido ${order.id} ha sido confirmado correctamente.`
+        });
+
+        return order;
+    }
+
     // Crear un pedido
     async createOrder(userId, items) {
 
@@ -99,10 +143,6 @@ class OrderService {
         }
     }
 
-
-
-    // Consultar y validar los productos de un pedido
-    
     // Consultar y validar los productos de un pedido
     async validateOrderItems(items) {
         const validatedItems = [];
@@ -154,9 +194,6 @@ class OrderService {
         return validatedItems;
     }
 
-
-
-
     // Reservar inventario de todos los productos
     async reserveOrderItems(items) {
         const reservedItems = [];
@@ -194,9 +231,6 @@ class OrderService {
         }
     }
 
-
-
-   
     // Guardar pedido y detalles en una transacción
     async saveOrder(userId, items) {
         const transaction = await sequelize.transaction();
@@ -252,9 +286,6 @@ class OrderService {
 
         return savedOrder;
     }
-
-
-
 }
 
 export default new OrderService();

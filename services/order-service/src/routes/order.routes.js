@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 import OrderController from '../controllers/OrderController.js';
 
@@ -9,6 +8,9 @@ router.post('/', OrderController.createOrder);
 
 // Consultar todos los pedidos
 router.get('/', OrderController.getAllOrders);
+
+// Confirmar un pedido
+router.patch('/:id/confirm', OrderController.confirmOrder);
 
 // Consultar un pedido por ID
 router.get('/:id', OrderController.getOrderById);
