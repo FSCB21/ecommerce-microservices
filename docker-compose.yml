@@ -1,5 +1,8 @@
-
 services:
+  # ==========================================
+  # INFRAESTRUCTURA
+  # ==========================================
+
   postgres:
     image: postgres:17
     container_name: ecommerce-postgres
@@ -36,6 +39,144 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # INICIALIZACIÓN DE BASES DE DATOS
+  # ==========================================
+
+  user-init:
+    build:
+      context: ./services/user-service
+    command: ["npx", "sequelize-cli", "db:migrate", "--env", "development"]
+    environment: &database-environment
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  product-init:
+    build:
+      context: ./services/product-service
+    command: ["sh", "-c", "npx sequelize-cli db:migrate --env development && npx sequelize-cli db:seed:all --env development"]
+    environment: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  order-init:
+    build:
+      context: ./services/order-service
+    command: ["sh", "-c", "npx sequelize-cli db:migrate --env development && npx sequelize-cli db:seed:all --env development"]
+    environment: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  notification-init:
+    build:
+      context: ./services/notification-service
+    command: ["npx", "sequelize-cli", "db:migrate", "--env", "development"]
+    environment: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ==========================================
+  # MICROSERVICIO DE USUARIOS
+  # ==========================================
+
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: ecommerce-user-service
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "3001:3001"
+    depends_on:
+      user-init:
+        condition: service_completed_successfully
+
+  # ==========================================
+  # MICROSERVICIO DE PRODUCTOS
+  # ==========================================
+
+  product-service:
+    build:
+      context: ./services/product-service
+    container_name: ecommerce-product-service
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+    ports:
+      - "3002:3002"
+    depends_on:
+      product-init:
+        condition: service_completed_successfully
+
+  # ==========================================
+  # MICROSERVICIO DE PEDIDOS
+  # ==========================================
+
+  order-service:
+    build:
+      context: ./services/order-service
+    container_name: ecommerce-order-service
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      USER_SERVICE_URL: http://user-service:3001/api
+      PRODUCT_SERVICE_URL: http://product-service:3002/api
+    ports:
+      - "3003:3003"
+    depends_on:
+      order-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+
+  # ==========================================
+  # MICROSERVICIO DE NOTIFICACIONES
+  # ==========================================
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: ecommerce-notification-service
+    restart: unless-stopped
+    environment:
+      <<: *database-environment
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+    ports:
+      - "3004:3004"
+    depends_on:
+      notification-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+    name: ecommerce-microservices_postgres_data
   rabbitmq_data:
+    name: ecommerce-microservices_rabbitmq_data

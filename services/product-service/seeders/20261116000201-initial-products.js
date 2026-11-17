@@ -77,14 +77,17 @@ const products = [
 export async function up(queryInterface) {
     const now = new Date();
 
-    await queryInterface.bulkInsert(
-        'products',
-        products.map(product => ({
+    for (const product of products) {
+        await queryInterface.bulkInsert('products', [{
             ...product,
             created_at: now,
             updated_at: now
-        }))
-    );
+        }], {
+            ignoreDuplicates: true
+        });
+    }
+
+    console.log('Productos iniciales insertados sin duplicar registros existentes');
 }
 
 export async function down(queryInterface) {
